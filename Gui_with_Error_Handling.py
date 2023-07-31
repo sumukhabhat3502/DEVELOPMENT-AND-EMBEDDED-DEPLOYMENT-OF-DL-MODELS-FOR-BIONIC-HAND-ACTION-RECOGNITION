@@ -224,7 +224,7 @@ def update_plot(frame):
             red_light.set_color('red')  # Change marker color to red
     # live_model_eval(data1)
     global test_sample
-    test_sample = data1
+    test_sample = data2[-1000:]
     return line1, line2, line3, red_light, green_light
 
 
@@ -354,7 +354,7 @@ def live_model_eval(input_data):
     print("hello")
     print(input_data)
     # Load the TFLite model
-    interpreter = tf.lite.Interpreter(model_path="D:/project/DRDO/ML_gui_v2/ashok.tflite")
+    interpreter = tf.lite.Interpreter(model_path="C:/Users/sumuk/Desktop/DRDO/SE2T2.tflite")
     interpreter.allocate_tensors()
 
     # Get input and output details
