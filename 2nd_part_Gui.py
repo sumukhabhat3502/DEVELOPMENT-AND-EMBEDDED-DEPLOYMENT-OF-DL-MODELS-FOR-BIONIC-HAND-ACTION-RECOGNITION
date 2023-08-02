@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter.ttk import Progressbar
 from tkinter import *
-from tkinter import filedialog as fdcd, filedialog, messagebox
+from tkinter import filedialog as fdcd, messagebox
 
 import os
 import time
@@ -57,7 +57,7 @@ def import_data():
 
         # Create a PrettyTable object
         table = PrettyTable()
-        table.field_names = ["", "EMG1", "EMG2", "EMG3"]
+        table.field_names = ["Label", "EMG1", "EMG2", "EMG3"]
         # Get unique labels from all EMG sensors
         labels = set(unique_labels_emg1.index) | set(unique_labels_emg2.index) | set(unique_labels_emg3.index)
         # Add rows to the table
@@ -382,7 +382,7 @@ def evaluate_model():
 def load_cmodel():
     global cmodel
     try:
-        filename = filedialog.askopenfilename(filetypes=[("H5 Files", "*.h5")])
+        filename = fdcd.askopenfilename(filetypes=[("H5 Files", "*.h5")])
         loaded_model = tf.keras.models.load_model(filename)
 
         # Convert the model to TensorFlow Lite format with post-training quantization

@@ -7,6 +7,9 @@ import threading
 from matplotlib import animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import *
+
+from pyfirmata2 import Arduino
+
 from serial.tools import list_ports
 
 
@@ -14,6 +17,7 @@ root = tk.Tk()
 root.geometry("1800x900")
 root.resizable(False, False)
 root.title("EMG Data")
+arduino_port = 'COM10'  # Replace 'COM3' with the actual port name of your Arduino
 
 fontsize = 8
 linewidth = 0.75
@@ -87,38 +91,31 @@ sensor_names = ["Sensor 1", "Sensor 2", "Sensor 3"]
 values_plotted = 0
 # Serial communication thread
 class SerialThread(threading.Thread):
-    def __init__(self, serial_port):
+    def __init__(self, serial_port=None):
         threading.Thread.__init__(self)
         self.serial_port = serial_port
-        self.data_queue = []
+        self.sensor1_value = None
+        self.sensor2_value = None
+        self.sensor3_value = None
         self.running = True
         self.paused = False
 
     def run(self):
-        entry_count = 0  # Number of entries recorded
         try:
-            while self.running and entry_count != 1200:
+            while self.running:
                 if not self.paused:
                     try:
-                        values = self.serial_port.readline().decode("utf-8").split()
-                        if len(values) == 3:
-                            sensor1 = int(values[0])
-                            sensor2 = int(values[1])
-                            sensor3 = int(values[2])
-                            self.data_queue.append((sensor1, sensor2, sensor3))
-                            entry_count += 1
-                    except UnicodeDecodeError:
-                        messagebox.showerror("UnicodeDecodeError", "An error occurred while decoding the serial data.")
+                        # Read data from the Arduino
+                        self.sensor1_value = self.serial_port.analog[0].read()
+                        self.sensor2_value = self.serial_port.analog[1].read()
+                        self.sensor3_value = self.serial_port.digital[32].read()
+                    except Exception as e:
+                        messagebox.showerror("Error", str(e))
                         self.resume()
-        except serial.SerialException as e:
-            messagebox.showerror("SerialException", str(e))
         except Exception as e:
             messagebox.showerror("Error", str(e))
         finally:
-            print(entry_count)
-            if entry_count == 1200:
-                Accept_button.configure(state='normal')
-            self.serial_port.close()  # Close the serial port
+            self.serial_port.exit()  # Close the serial port
 
     def stop(self):
         self.running = False
@@ -129,12 +126,8 @@ class SerialThread(threading.Thread):
     def resume(self):
         self.paused = False
 
-    def get_data(self):
-        data = self.data_queue.copy()
-        self.data_queue.clear()
-        return data
-
-
+    def get_values(self):
+        return self.sensor1_value, self.sensor2_value, self.sensor3_value
 serial_thread = None  # Initialize serial thread variable
 trial_no = 1  # Initialize trial number
 # Dataframe
@@ -192,24 +185,23 @@ def update_plot(frame):
 
     if serial_thread is not None and serial_thread.is_alive():
         # Get data from serial thread
-        new_data = serial_thread.get_data()
+        sensor1_value, sensor2_value, sensor3_value = serial_thread.get_values()
+        if sensor1_value is not None and sensor2_value is not None and sensor3_value is not None:
+            data1.append(sensor1_value * 1023)  # Convert 0-1 range to 0-1023
+            data2.append(sensor2_value * 1023)  # Convert 0-1 range to 0-1023
+            data3.append(sensor3_value)
 
-        # Process new data
-        for sensor1, sensor2, sensor3 in new_data:
-            data1.append(sensor1)
-            data2.append(sensor2)
-            data3.append(sensor3)
+            # Limit the number of data points
+            data1 = data1[-1000:]
+            data2 = data2[-1000:]
+            data3 = data3[-1000:]
 
-        # Limit the number of data points
-        data1 = data1[-1000:]
-        data2 = data2[-1000:]
-        data3 = data3[-1000:]
+            # Update the plot lines with the new data
+            line1.set_data(range(len(data1)), data1)
+            line2.set_data(range(len(data2)), data2)
+            line3.set_data(range(len(data3)), data3)
+            values_plotted += 1
 
-        # Update the plot lines with the new data
-        line1.set_data(range(len(data1)), data1)
-        line2.set_data(range(len(data2)), data2)
-        line3.set_data(range(len(data3)), data3)
-        values_plotted += len(new_data)
         # Update the light colors
         if values_plotted < 1000:
             red_light.set_data([0], [0])
@@ -220,7 +212,6 @@ def update_plot(frame):
             green_light.set_data([0], [0])
             plotting_done = True  # Set plotting_done to True
             red_light.set_color('red')  # Change marker color to red
-
     return line1, line2, line3, red_light, green_light
 
 def save_data():
@@ -305,10 +296,17 @@ ani = animation.FuncAnimation(fig, update_plot, frames=1000, interval=100, blit=
 
 def start_button_click():
     try:
-        open_port()
+        board = Arduino(arduino_port)
+        # Create serial thread
+        global serial_thread
+        serial_thread = SerialThread(board)
+        serial_thread.daemon = True
+        serial_thread.start()
+        Start_button.configure(state='disabled')
+    except serial.SerialException as e:
+        messagebox.showerror("SerialException", str(e))
     except Exception as e:
         messagebox.showerror("Error", str(e))
-
 def enable_disable_buttons():
     name = name_entry.get()
     age = age_entry.get()
@@ -346,30 +344,25 @@ destination_entry.place(x=28, y=280)
 browse_button = Button(root, text="Browse", command=browse_folder)
 browse_button.place(x=10, y=280)
 
-port_menu = tk.StringVar(root)
-port_menu.set("")  # Set an empty string as the default selection
-
-port_dropdown = OptionMenu(root, port_menu, "")  # Initialize the dropdown with an empty string
-port_dropdown.place(x=1650, y=300)
-port_dropdown.config(height=4, width=16)
-
-def update_port_dropdown():
-    ports = get_available_ports()
-    port_menu.set("")  # Reset the default selection
-    port_dropdown['menu'].delete(0, 'end')  # Clear the dropdown menu
-
-    if ports:
-        for port in ports:
-            port_dropdown['menu'].add_command(label=port, command=tk._setit(port_menu, port))  # Add ports to the dropdown
-    else:
-        port_dropdown['menu'].add_command(label="No ports available", command=tk._setit(port_menu, ""))  # Display a message when no ports are available
-
-update_port_dropdown()  # Call the function once at the beginning
-
 name_entry.bind("<KeyRelease>", lambda event: enable_disable_buttons())
 age_entry.bind("<KeyRelease>", lambda event: enable_disable_buttons())
 destination_entry.bind("<KeyRelease>", lambda event: enable_disable_buttons())
 
+# Create a dropdown list for available ports
+port_menu = tk.StringVar(root)
+ports = get_available_ports()
+port_menu.set(ports[0] if ports else "")  # Set the default selection to the first port if available
+port_dropdown = OptionMenu(root, port_menu, *ports)
+port_dropdown.place(x=1650, y=300)
+port_dropdown.config(height=4, width=16)
+
+Start_button.configure(command=start_button_click)
+Accept_button.configure(command=accept_button_click)
+Reject_button.configure(command=reject_button_click)
+New_button.configure(command=new_button_click)
+Close_button.configure(command=close_button_click)
+root.protocol("WM_DELETE_WINDOW", on_closing)
+root.mainloop()
 Start_button.configure(command=start_button_click)
 Accept_button.configure(command=accept_button_click)
 Reject_button.configure(command=reject_button_click)
