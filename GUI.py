@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import filedialog
 import matplotlib.pyplot as plt
 import pandas as pd
 import serial
@@ -7,17 +7,13 @@ import threading
 from matplotlib import animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import *
-
-from pyfirmata2 import Arduino
-
-from serial.tools import list_ports
-
+import pyfirmata
 
 root = tk.Tk()
 root.geometry("1800x900")
 root.resizable(False, False)
 root.title("EMG Data")
-arduino_port = 'COM10'  # Replace 'COM3' with the actual port name of your Arduino
+arduino_port = 'COM10'  # Replace 'COM10' with the actual port name of your Arduino
 
 fontsize = 8
 linewidth = 0.75
@@ -105,17 +101,43 @@ class SerialThread(threading.Thread):
             while self.running:
                 if not self.paused:
                     try:
-                        # Read data from the Arduino
-                        self.sensor1_value = self.serial_port.analog[0].read()
-                        self.sensor2_value = self.serial_port.analog[1].read()
-                        self.sensor3_value = self.serial_port.digital[32].read()
+                        # Check if the serial port is ready
+                        if self.serial_port is not None:
+                            # Check the number of analog and digital pins available
+                            num_analog_pins = len(self.serial_port.analog)
+                            num_digital_pins = len(self.serial_port.digital)
+
+                            if num_analog_pins >= 3:
+                                self.sensor1_value = self.serial_port.analog[0].read()
+                                self.sensor2_value = self.serial_port.analog[1].read()
+                                self.sensor3_value = self.serial_port.analog[2].read()
+                                # print(f"Number of analog pins available: {num_analog_pins}")
+                                # if num_digital_pins >= 33:
+                                    # self.sensor3_value = self.serial_port.digital[32].read()
+                                    # print(f"Number of digital pins available: {num_digital_pins}")
+
+                        # Check if the values are valid (not None)
+                        if self.sensor1_value is not None:
+                            self.sensor1_value *= 1023  # Convert 0-1 range to 0-1023
+                            print(f"Sensor 1 value: {self.sensor1_value}")
+                        else:
+                            print("Sensor 1 value: None")
+
+                        if self.sensor2_value is not None:
+                            self.sensor2_value *= 1023  # Convert 0-1 range to 0-1023
+                            print(f"Sensor 2 value: {self.sensor2_value}")
+
+                        if self.sensor3_value is not None:
+                            self.sensor3_value *= 1023  # Convert 0-1 range to 0-1023
+                            print(f"Sensor 3 value: {self.sensor3_value}")
                     except Exception as e:
-                        messagebox.showerror("Error", str(e))
+                        print(f"Error in SerialThread: {str(e)}")
                         self.resume()
         except Exception as e:
-            messagebox.showerror("Error", str(e))
+            print(f"Error in SerialThread: {str(e)}")
         finally:
-            self.serial_port.exit()  # Close the serial port
+            if self.serial_port is not None:
+                self.serial_port.exit()  # Close the serial port
 
     def stop(self):
         self.running = False
@@ -128,20 +150,22 @@ class SerialThread(threading.Thread):
 
     def get_values(self):
         return self.sensor1_value, self.sensor2_value, self.sensor3_value
+
+
 serial_thread = None  # Initialize serial thread variable
 trial_no = 1  # Initialize trial number
 # Dataframe
 
 columns = ([str(i) for i in range(0, 1000)])
-columns.extend(["Trial No", "label", "EMG"])
+columns.extend(["Trial No", "label", "EMG1", "EMG2", "EMG3"])
 df = pd.DataFrame(columns=columns)
 
 def get_available_ports():
     try:
-        ports = list_ports.comports()
+        ports = serial.tools.list_ports.comports()
         return [port.device for port in ports]
     except Exception as e:
-        messagebox.showerror("Error", str(e))
+        print(str(e))
         return []
 
 def open_port():
@@ -151,21 +175,18 @@ def open_port():
         if serial_thread is None or not serial_thread.is_alive():
             try:
                 # Create serial object
-                s = serial.Serial(selected_port, 115200, timeout=5)
-
+                board = pyfirmata.Arduino(selected_port)
                 # Create serial thread
-                serial_thread = SerialThread(s)
+                serial_thread = SerialThread(board)
                 serial_thread.daemon = True
                 serial_thread.start()
-            # except serial.SerialException as e:
-            #     messagebox.showerror("SerialException", str(e))
             except Exception as e:
-                messagebox.showerror("Error", str(e))
+                print(str(e))
         else:
             print("Port is already open.")
             serial_thread.resume()  # Resume the serial thread
     else:
-        messagebox.showwarning("Warning", "Please select a port.")
+        print("Please select a port.")
 
 red_light = None
 green_light = None
@@ -189,7 +210,7 @@ def update_plot(frame):
         if sensor1_value is not None and sensor2_value is not None and sensor3_value is not None:
             data1.append(sensor1_value * 1023)  # Convert 0-1 range to 0-1023
             data2.append(sensor2_value * 1023)  # Convert 0-1 range to 0-1023
-            data3.append(sensor3_value)
+            data3.append(sensor3_value * 1023)  # Convert 0-1 range to 0-1023
 
             # Limit the number of data points
             data1 = data1[-1000:]
@@ -218,12 +239,9 @@ def save_data():
     global trial_no, df, selected_action, values_plotted
     if len(data1) == len(data2) == len(data3) and len(data1) == 1000:
         # Create rows for data1, data2, and data3
-        row1 = (data1[:1000])
-        row1.extend([trial_no, selected_action.get(), "EMG1"])
-        row2 = (data2[:1000])
-        row2.extend([trial_no, selected_action.get(), "EMG2"])
-        row3 = (data3[:1000])
-        row3.extend([trial_no, selected_action.get(), "EMG3"])
+        row1 = data1[:1000] + [trial_no, selected_action.get(), "EMG1"]
+        row2 = data2[:1000] + [trial_no, selected_action.get(), "EMG2"]
+        row3 = data3[:1000] + [trial_no, selected_action.get(), "EMG3"]
 
         # Append the rows to the dataframe
         df.loc[len(df)] = row1
@@ -232,29 +250,6 @@ def save_data():
         trial_no += 1
         values_plotted = 0
         print(df)
-        # df.to_csv("emg_data.csv", index=False)
-        # Get the name and age entered by the user
-        name = name_entry.get()
-        age = age_entry.get()
-
-        # Get the destination folder
-        destination_folder = destination_entry.get()
-
-        if name and age and destination_folder:
-            try:
-                # Create the file name with name and age
-                file_name = f"{name}_{age}.csv"
-
-                # Combine the destination folder and file name
-                file_path = f"{destination_folder}/{file_name}"
-
-                # Save the dataframe to the CSV file
-                df.to_csv(file_path, index=False)
-                print(f"Data saved to: {file_path}")
-            except Exception as e:
-                messagebox.showerror("Error", str(e))
-        else:
-            messagebox.showerror("Error", "Please enter name, age, and select destination folder.")
 
     else:
         print("Error: Data arrays have different lengths or are incomplete.")
@@ -276,19 +271,17 @@ def accept_button_click():
             save_data()
             Accept_button.configure(state='disabled')  # Disable the button again until the next trial collection
         else:
-            messagebox.showerror("Error", "Please collect 1000 values before accepting data.")
+            print("Please collect 1000 values before accepting data.")
     else:
-        messagebox.showerror("Error", "Please enter name, age, and select destination folder.")
+        print("Please enter name, age, and select destination folder.")
 
 def reject_button_click():
-    messagebox.showinfo("Data Rejected", "Data rejected")
+    print("Data rejected")
 
 def new_button_click():
-    # enable_buttons()
     root.destroy()
 
 def close_button_click():
-    # enable_buttons()
     root.destroy()
 
 # Create the animation that updates the plot
@@ -296,17 +289,16 @@ ani = animation.FuncAnimation(fig, update_plot, frames=1000, interval=100, blit=
 
 def start_button_click():
     try:
-        board = Arduino(arduino_port)
+        board = pyfirmata.Arduino(arduino_port)
         # Create serial thread
         global serial_thread
         serial_thread = SerialThread(board)
         serial_thread.daemon = True
         serial_thread.start()
         Start_button.configure(state='disabled')
-    except serial.SerialException as e:
-        messagebox.showerror("SerialException", str(e))
     except Exception as e:
-        messagebox.showerror("Error", str(e))
+        print(str(e))
+
 def enable_disable_buttons():
     name = name_entry.get()
     age = age_entry.get()
@@ -352,9 +344,6 @@ destination_entry.bind("<KeyRelease>", lambda event: enable_disable_buttons())
 port_menu = tk.StringVar(root)
 ports = get_available_ports()
 port_menu.set(ports[0] if ports else "")  # Set the default selection to the first port if available
-port_dropdown = OptionMenu(root, port_menu, *ports)
-port_dropdown.place(x=1650, y=300)
-port_dropdown.config(height=4, width=16)
 
 Start_button.configure(command=start_button_click)
 Accept_button.configure(command=accept_button_click)
@@ -362,12 +351,4 @@ Reject_button.configure(command=reject_button_click)
 New_button.configure(command=new_button_click)
 Close_button.configure(command=close_button_click)
 root.protocol("WM_DELETE_WINDOW", on_closing)
-root.mainloop()
-Start_button.configure(command=start_button_click)
-Accept_button.configure(command=accept_button_click)
-Reject_button.configure(command=reject_button_click)
-New_button.configure(command=new_button_click)
-Close_button.configure(command=close_button_click)
-root.protocol("WM_DELETE_WINDOW", on_closing)
-
 root.mainloop()
