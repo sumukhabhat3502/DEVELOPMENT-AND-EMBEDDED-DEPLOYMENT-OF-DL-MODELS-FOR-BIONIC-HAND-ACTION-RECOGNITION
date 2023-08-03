@@ -2,11 +2,11 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import serial
 import threading
-from tkinter import *
-
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from tkinter import *
 from serial.tools import list_ports
 
 root = tk.Tk()
@@ -38,12 +38,12 @@ frmVid = Frame(root, bg='lightgray', width=330, height=400)
 frmVid.place(x=20, y=350)
 Start_button = Button(root, text="Start", height=4, width=18)
 Start_button.place(x=200, y=60)
-Accept_button = Button(root, text="Accept Data", height=4, width=18, command=root.destroy)
+Accept_button = Button(root, text="Accept Data", height=4, width=18)
 Accept_button.place(x=1650, y=100)
-Reject_button = Button(root, text="Reject Data", height=4, width=18, command=root.destroy)
+Reject_button = Button(root, text="Reject Data", height=4, width=18,)
 Reject_button.place(x=1650, y=200)
 
-New_button = Button(root, text="New Data", height=4, width=18, command=root.destroy)
+New_button = Button(root, text="New Data", height=4, width=18,)
 New_button.place(x=1650, y=300)
 Close_button = Button(root, text="Close", height=4, width=18, command=root.destroy)
 Close_button.place(x=1650, y=500)
@@ -103,9 +103,7 @@ class SerialThread(threading.Thread):
                                 sensor1 = int(values[0])
                                 sensor2 = int(values[1])
                                 sensor3 = int(values[2])
-                                print("sensor1: ",sensor1)
-                                print("sensor2: ",sensor2)
-                                print("sensor3: ",sensor3)
+
                                 data1.append(sensor1)
                                 data2.append(sensor2)
                                 data3.append(sensor3)
@@ -120,12 +118,8 @@ class SerialThread(threading.Thread):
             messagebox.showerror("Error", str(e))
         finally:
             if entry_count == 1001:
-                print("data1:",data1)
-                print("data2:",data2)
-                print("data3:",data3)
+                print("Data collection complete.")
                 Accept_button.configure(state='normal')
-                # Call the function to plot the data once data collection is complete
-                plot_data()
             self.serial_port.close()  # Close the serial port
 
     def stop(self):
@@ -160,10 +154,51 @@ def start_serial_communication():
 # Associate the start_serial_communication function with the "Start" button click event
 Start_button.configure(command=start_serial_communication)
 
+# DataFrames for each trial
+trial_dataframes = []
+current_trial_data = None
+
+def accept_data():
+    global current_trial_data
+
+    # Save the current data to a DataFrame for the current trial
+    current_trial_data = pd.DataFrame({'Sensor1': data1, 'Sensor2': data2, 'Sensor3': data3})
+
+    # Append the data to the list of trial dataframes
+    trial_dataframes.append(current_trial_data)
+
+    # Clear the data lists for the next trial
+    data1.clear()
+    data2.clear()
+    data3.clear()
+
+    # Print the current trial dataframe
+    print("Current Trial DataFrame:")
+    print(current_trial_data)
+
+    # Update the plot
+    plot_data()
+
+def reject_data():
+    # Clear the data lists and update the plot
+    data1.clear()
+    data2.clear()
+    data3.clear()
+    plot_data()
+
+def new_data():
+    # Clear the trial dataframes and update the plot
+    global trial_dataframes, current_trial_data
+    trial_dataframes = []
+    current_trial_data = None
+    data1.clear()
+    data2.clear()
+    data3.clear()
+    plot_data()
+
 def plot_data():
     # Plot the data once data collection is complete
     ax1.plot(data1, 'r-', label='Sensor 1')
-
     ax2.plot(data2, 'g-', label='Sensor 2')
     ax3.plot(data3, 'b-', label='Sensor 3')
 
@@ -175,4 +210,11 @@ def plot_data():
     # Update the plot
     canvas.draw()
 
+    combined_data = pd.concat(trial_dataframes)
+    print("Combined DataFrame of All Trials:")
+    print(combined_data)
+
+Accept_button.configure(command=accept_data)
+New_button.configure(command=new_data)
+Reject_button.configure(command=reject_data)
 root.mainloop()
