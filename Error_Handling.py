@@ -202,14 +202,20 @@ update_light_labels()
 
 def get_available_ports():
     ports = list_ports.comports()
-    return [port.device for port in ports]
+    available_ports = [port.device for port in ports]
+
+    if not available_ports:
+        available_ports.append("No ports available")
+
+    return available_ports
 
 
+# ...
 ports_menu = tk.OptionMenu(root, ports_dropdown, *get_available_ports())
-ports_dropdown.set(get_available_ports()[
-                       0] if get_available_ports() else "")  # Set the default selection to the first port if available
+ports_dropdown.set(ports_dropdown.get())  # Set the default selection if available
 ports_menu.place(x=1650, y=600)
 ports_menu.config(height=4, width=16)
+# ...
 
 
 def start_serial_communication():
@@ -229,6 +235,8 @@ def start_serial_communication():
     except serial.SerialException as e:
         messagebox.showerror("SerialException", str(e))
 
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
 
 # Associate the start_serial_communication function with the "Start" button click event
 Start_button.configure(command=start_serial_communication)
@@ -496,4 +504,8 @@ Save_button.configure(command=save_thrice)
 View_button.configure(command=view_data)
 
 
-root.mainloop()
+# In the main loop, you can put the GUI in a try-except block to catch potential errors and display a message.
+try:
+    root.mainloop()
+except Exception as e:
+    messagebox.showerror("Error", str(e))
