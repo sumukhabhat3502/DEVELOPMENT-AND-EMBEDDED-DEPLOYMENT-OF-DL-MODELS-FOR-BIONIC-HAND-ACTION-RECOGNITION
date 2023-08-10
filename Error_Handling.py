@@ -35,7 +35,6 @@ selected_action = click_action
 Action_menu.place(x=8, y=60)
 Action_menu.config(width=12)
 
-
 # Entry fields for Name, Age, and Hand
 name_label = Label(root, text="Name:")
 name_label.place(x=20, y=100)
@@ -191,7 +190,7 @@ def start_serial_communication():
     print("Selected Action:", selected_action)
 
     try:
-        selected_port=ports_dropdown.get()
+        selected_port = ports_dropdown.get()
         # Create and start the serial communication thread
         serial_port = serial.Serial(selected_port, 115200)  # Replace 'COM3' with your desired port and baud rate
         serial_thread = SerialThread(serial_port)
@@ -216,7 +215,8 @@ columns2.extend(["TrailNumber", "EMG"])
 thrice_data = pd.DataFrame(columns=columns2)
 
 current_trial_number = 1
-current_trial_data_thrice=1
+current_trial_data_thrice = 1
+
 
 def accept_data():
     global current_trial_data, current_trial_number, current_trial_data_thrice, thrice_data
@@ -242,14 +242,14 @@ def accept_data():
         # Increment the trial number for the next trial
         current_trial_number += 1
 
-        longrow=list(data1.queue)+list(data2.queue)+list(data3.queue)
+        longrow = list(data1.queue) + list(data2.queue) + list(data3.queue)
         longrow.append(selected_action.get())
         longrow.append("EMG1,EMG2,EMG3")
 
         thrice_data.loc[len(thrice_data)] = longrow
         # Append the data to the list of trial dataframes
         trial_dataframes.append(current_trial_data_thrice)
-        current_trial_data_thrice+=1
+        current_trial_data_thrice += 1
         trial_dataframes2.append(thrice_data)
 
         # Update the plot
@@ -290,9 +290,9 @@ def new_data():
         messagebox.showerror("Error", "Data collection is ongoing. Please wait until data collection completes.")
         return
     # Clear the trial dataframes and update the plot
-    global trial_dataframes, current_trial_data
+    global trial_dataframes, current_trial_data,trial_dataframes2
     trial_dataframes = []
-    trial_dataframes2=[]
+    trial_dataframes2 = []
     current_trial_data = None
     while not data1.empty():
         data1.get()
@@ -389,7 +389,6 @@ def save_thrice():
     messagebox.showinfo("Data Saved", f"Data has been saved to {filename2} successfully!")
 
 
-
 # Entry field for the destination folder
 folder_label = Label(root, text="Destination Folder:")
 folder_label.place(x=20, y=250)
@@ -398,11 +397,13 @@ folder_entry.place(x=150, y=250)
 browse_button = Button(root, text="Browse", command=browse_folder)
 browse_button.place(x=20, y=300)
 
+
 def are_fields_filled():
     name = name_entry.get().strip()
     hand = hand_entry.get().strip()
     folder = folder_entry.get().strip()
     return name and hand and folder
+
 
 def enable_buttons():
     if are_fields_filled():
@@ -418,10 +419,12 @@ def enable_buttons():
         New_button.configure(state='disabled')
         Save_button.configure(state='disabled')
 
+
 # Bind the Entry fields to the enable_buttons function
 name_entry.bind("<KeyRelease>", lambda event: enable_buttons())
 hand_entry.bind("<KeyRelease>", lambda event: enable_buttons())
 folder_entry.bind("<KeyRelease>", lambda event: enable_buttons())
+
 
 def plot_data():
     ax1.clear()
@@ -446,6 +449,7 @@ def plot_data():
 
     # Update the plot
     canvas.draw()
+
 
 # ani = animation.FuncAnimation(fig, animate, interval=100, blit=True)
 Accept_button.configure(command=accept_data)
