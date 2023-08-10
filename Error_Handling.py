@@ -427,8 +427,8 @@ def save_thrice():
     # Create the folder if it doesn't exist
     os.makedirs(destination_folder, exist_ok=True)
 
-    another = "another"
-    filename2 = os.path.join(destination_folder, f"{name}_{age}_{hand}_{another}.csv")
+
+    filename2 = os.path.join(destination_folder, f"{name}_{age}_{hand}.csv")
     thrice_data.to_csv(filename2, index=False)
     messagebox.showinfo("Data Saved", f"Data has been saved to {filename2} successfully!")
 
