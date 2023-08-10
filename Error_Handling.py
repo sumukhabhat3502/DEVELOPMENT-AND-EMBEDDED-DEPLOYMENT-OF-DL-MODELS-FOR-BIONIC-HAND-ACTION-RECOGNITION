@@ -169,6 +169,7 @@ class SerialThread(threading.Thread):
             messagebox.showerror("Error", str(e))
         finally:
             if entry_count == 1000:
+                Start_button.configure(state='normal')
                 print("Data collection complete.")
                 self.lights_on = False  # Turn off red light (data collection complete)
                 green_light_label.config(fg="green")  # Turn on green light (data collection complete)
@@ -224,7 +225,7 @@ def start_serial_communication():
     # Get the selected action from the drop-down menu
     selected_action = click_action.get()
     print("Selected Action:", selected_action)
-
+    Start_button.configure(state='disabled')
     try:
         selected_port = ports_dropdown.get()
         # Create and start the serial communication thread
