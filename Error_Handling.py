@@ -74,8 +74,8 @@ Save_button = Button(root, text="Save Data", height=4, width=18)
 Save_button.place(x=1650, y=400)
 
 # View Entire Data button
-# View_button = Button(root, text="View Entire Data", height=4, width=18)
-# View_button.place(x=1650, y=500)
+View_button = Button(root, text="View Entire Data", height=4, width=18)
+View_button.place(x=1650, y=500)
 
 # Ports
 ports_dropdown = tk.StringVar()
@@ -111,6 +111,15 @@ ax1.legend()
 ax2.legend()
 ax3.legend()
 
+#Light Logical
+
+red_light_label = Label(root, text="●", fg="red", font=("Helvetica", 20))
+red_light_label.place(x=1450, y=20)
+
+green_light_label = Label(root, text="●", fg="green", font=("Helvetica", 20))
+green_light_label.place(x=1450, y=70)
+
+
 canvas = FigureCanvasTkAgg(fig, master=frm)
 canvas.draw()
 canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -122,6 +131,7 @@ serial_thread = None  # Initialize serial thread variable
 # Serial port selection menu
 class SerialThread(threading.Thread):
     def __init__(self, serial_port):
+        self.lights_on = False
         threading.Thread.__init__(self)
         self.serial_port = serial_port
         self.data_queue = []
@@ -133,6 +143,7 @@ class SerialThread(threading.Thread):
         try:
             while self.running and entry_count != 1000:
                 if not self.paused:
+                    self.lights_on = True
                     try:
                         line = self.serial_port.readline().decode().strip()
                         if line:
@@ -150,6 +161,8 @@ class SerialThread(threading.Thread):
                     except UnicodeDecodeError:
                         messagebox.showerror("UnicodeDecodeError", "An error occurred while decoding the serial data.")
                         self.resume()
+                else:
+                    self.lights_on = False
         except serial.SerialException as e:
             messagebox.showerror("SerialException", str(e))
         except Exception as e:
@@ -157,17 +170,34 @@ class SerialThread(threading.Thread):
         finally:
             if entry_count == 1000:
                 print("Data collection complete.")
+                self.lights_on = False  # Turn off red light (data collection complete)
+                green_light_label.config(fg="green")  # Turn on green light (data collection complete)
                 Accept_button.configure(state='normal')
             self.serial_port.close()  # Close the serial port
 
     def stop(self):
         self.running = False
+        self.lights_on = False
+
 
     def pause(self):
         self.paused = True
+        self.lights_on = False
 
     def resume(self):
         self.paused = False
+        self.lights_on = True
+def update_light_labels():
+    if serial_thread and serial_thread.lights_on:
+        red_light_label.config(fg="red")
+        green_light_label.config(fg="black")
+    else:
+        red_light_label.config(fg="black")
+        green_light_label.config(fg="green")
+    root.after(500, update_light_labels)  # Update every 500 milliseconds
+
+# Call the function to start updating the light labels
+update_light_labels()
 
 
 def get_available_ports():
@@ -271,6 +301,29 @@ def accept_data():
     messagebox.showerror("Error", "Data collection is ongoing. Please wait until data collection completes.")
 
 
+def view_data():
+    if not trial_dataframes2:
+        messagebox.showerror("No Data", "No data available to view.")
+        return
+
+    thrice_data = pd.concat(trial_dataframes2)
+    print("Combined DataFrame of All Trials:")
+    print(thrice_data)
+
+    view_data_window = tk.Toplevel(root)
+    view_data_window.title("Combined Data")
+    view_data_window.geometry("800x600")
+
+    # Create a scrolled text widget to display the data
+    text_widget = scrolledtext.ScrolledText(view_data_window, wrap=tk.WORD, width=100, height=30)
+    text_widget.insert(tk.END, str(thrice_data))
+    text_widget.config(state=tk.DISABLED)  # Disable editing of the text widget
+    text_widget.pack(fill=tk.BOTH, expand=True)
+
+    # Enable vertical scrolling in the text widget
+    text_widget.config(yscrollcommand=True)
+
+
 def reject_data():
     if serial_thread and serial_thread.is_alive():
         messagebox.showerror("Error", "Data collection is ongoing. Please wait until data collection completes.")
@@ -309,23 +362,6 @@ def view_current_trial():
     print(current_trial_data)
     return current_trial_data
 
-
-def view_data():
-    combined_data = pd.concat(trial_dataframes)
-    print("Combined DataFrame of All Trials:")
-    print(combined_data)
-    view_data_window = tk.Toplevel(root)
-    view_data_window.title("Combined Data")
-    view_data_window.geometry("800x600")
-
-    # Create a scrolled text widget to display the data
-    text_widget = scrolledtext.ScrolledText(view_data_window, wrap=tk.WORD, width=100, height=30)
-    text_widget.insert(tk.END, str(combined_data))
-    text_widget.config(state=tk.DISABLED)  # Disable editing of the text widget
-    text_widget.pack(fill=tk.BOTH, expand=True)
-
-    # Enable vertical scrolling in the text widget
-    text_widget.config(yscrollcommand=True)
 
 
 def browse_folder():
@@ -457,7 +493,7 @@ New_button.configure(command=new_data)
 Reject_button.configure(command=reject_data)
 Save_button.configure(command=save_thrice)
 # Save_THRICE.configure(command=save_thrice)
-# View_button.configure(command=view_data)
+View_button.configure(command=view_data)
 
 
 root.mainloop()
